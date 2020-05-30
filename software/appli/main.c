@@ -1,7 +1,6 @@
  /**
   *
   * \file main.c
-
   */
 
 /* Includes ------------------------------------------------------------------*/
@@ -16,10 +15,10 @@
 #include "stm32f4_timer.h"
 #include "MPU6050/stm32f4_mpu6050.h"
 #include "systick.h"
+#include "init_stm32f4.h"
 
 
-int main(void)
-{
+int main(void){
 	HAL_Init();
 	SYS_init();			//initialisation du systeme (horloge...)
 
@@ -30,23 +29,37 @@ int main(void)
 
 	Systick_init();
 
-	VL53L1X_init();
+	//HAL_GPIO_WritePin(LEDS_GPIO, LED_GREEN_PIN | LED_ORANGE_PIN, SET);
+	HAL_GPIO_WritePin(LEDS_GPIO, LED_RED_PIN | LED_BLUE_PIN, SET);
 
+
+
+	init_pwm_tim1_tim3();
+
+	TEST_pwms();
+
+
+	//VL53L1X_init();
+
+	/*
 	MPU6050_t mpu6050_datastruct;
 	bool_e mpu6050_initialized = FALSE;
 	if(MPU6050_Init(&mpu6050_datastruct, MPU6050_VCC_GPIO, MPU6050_VCC_PIN, MPU6050_Device_0, MPU6050_Accelerometer_8G, MPU6050_Gyroscope_2000s) == MPU6050_Result_Ok)
 		mpu6050_initialized = TRUE;
+	*/
 
+	//TIMER2_run_1ms();
 
-	TIMER2_run_1ms();
 
 	while (1)
 	{
-		VL53L1X_process_main();
+
+		//VL53L1X_process_main();
+
 	}
 }
 
-
+/*
 //IT 1ms, de plus basse priorité que l'IT du systick !
 void TIMER2_user_handler_it_1ms(void)
 {
@@ -58,7 +71,7 @@ void TIMER2_user_handler_it_1ms(void)
 	//notamment pour discuter avec le MPU6050 ! (car il utilise le même bus I2C ! donc il faut uniquement lui causer en IT !)
 }
 
-
+*/
 
 
 
