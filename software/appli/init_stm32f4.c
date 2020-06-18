@@ -19,7 +19,7 @@
 //L'horloge du timer 3 est a 84MHz
 //Si l'on veut une PWM a 20kHz (inaudible) et 100 pas de rapports cycliques possibles, il faut prediviser par 42 :
 //168MHz/84 = 2MHz -> 500ns par pas... * 100 pas = 20kHz de frequence PWM
-#define PWM_FREQ_TIM	20000 	//Fréquence du signal PWM, en Hz
+#define PWM_FREQ_TIM	500 	//Fréquence du signal PWM, en Hz
 #define	PWM_PERIOD_TIM	100		//Nombre jusqu'auquel le timer va compter durant une période PWM
 
 #define	PWM_PRESC_TIM_3	((TIM2_3_4_5_6_7_12_13_14_CLK / PWM_FREQ_TIM) / PWM_PERIOD_TIM)	//Prédiviseur : nombre d'évènements qui provoquent +1 sur le décompte du timer
@@ -146,22 +146,16 @@ void PWM_TIMER_set_duty(TIM_HandleTypeDef tim_handle, int channel, uint16_t duty
 	__HAL_TIM_SET_COMPARE(&tim_handle, channel, (uint32_t) duty);
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+/*
+ * Fonctions de test des pwm/moteurs
+ * PWM T=2ms : f=500Hz
+ * Rapport entre 50 et 65
+ *
+ *
+ */
 
 void TEST_pwms(){
+/*
 	PWM_TIMER_set_duty(TimHandle_1, TIM_CHANNEL_1, 25);
 	PWM_TIMER_set_duty(TimHandle_1, TIM_CHANNEL_2, 50);
 	PWM_TIMER_set_duty(TimHandle_1, TIM_CHANNEL_3, 75);
@@ -171,11 +165,16 @@ void TEST_pwms(){
 	PWM_TIMER_set_duty(TimHandle_3, TIM_CHANNEL_2, 50);
 	PWM_TIMER_set_duty(TimHandle_3, TIM_CHANNEL_3, 75);
 	PWM_TIMER_set_duty(TimHandle_3, TIM_CHANNEL_4, 100);
+*/
+
+	PWM_TIMER_set_duty(TimHandle_3, TIM_CHANNEL_1, 75);
+
 }
 
 
-
-
+void test_moteur_PC6(uint16_t TIME){
+	PWM_TIMER_set_duty(TimHandle_3, TIM_CHANNEL_1, TIME);
+}
 
 
 

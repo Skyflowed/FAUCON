@@ -32,6 +32,10 @@
 	#define DEFAULT_STDIN_USART UART1_ID
 #endif
 
+static uart_id_e stdout_usart = DEFAULT_STDOUT_USART;
+static uart_id_e stderr_usart = DEFAULT_STDERR_USART;
+static uart_id_e stdin_usart 	= DEFAULT_STDIN_USART;
+
 
 #define HCLK_FREQUENCY_HZ     168000000	//40Mhz, Max: 168Mhz
 #define FLASH_WAIT_CYCLES (HCLK_FREQUENCY_HZ / 30000000)	//Voir page 62 du manuel de réference RM0090
@@ -67,8 +71,6 @@ void SYS_init(void)
 {
 	RCC_OscInitTypeDef RCC_OscInitStructure;
 	RCC_ClkInitTypeDef RCC_ClkInitStructure;
-
-	SystemInit();
 
 	__HAL_RCC_PWR_CLK_ENABLE();
 	__HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE1);
@@ -140,10 +142,7 @@ void SYS_init(void)
 	//Activation de l'exception Division par 0
 	SCB->CCR |= SCB_CCR_DIV_0_TRP_Msk;	//
 
-	//Config LibC: no buffering
-	setvbuf(stdout, NULL, _IONBF, 0 );
-	setvbuf(stderr, NULL, _IONBF, 0 );
-	setvbuf(stdin, NULL, _IONBF, 0 );
+
 }
 
 
@@ -353,6 +352,16 @@ caddr_t _sbrk ( int incr )
 }
 */
 
+
+
+void SYS_set_std_usart(uart_id_e in, uart_id_e out, uart_id_e err)
+{
+	stdin_usart = in;
+	stdout_usart = out;
+	stderr_usart = err;
+}
+
+
 /*
  read
  Read a character to a file. `libc' subroutines will use this system routine for input from all files, including stdin
@@ -364,8 +373,13 @@ int _read(int file, char *ptr, int len) {
 	int num = 0;
 	switch (file) {
 		case STDIN_FILENO:
-			for (n = 0; n < len; n++) {
-				char c = UART_read_stdin();
+			for (n = 0; n < len; n++)
+			{
+				/*while ((stdin_usart->SR & USART_FLAG_RXNE) == (uint16_t)RESET);
+				char c = (char)(stdin_usart->DR & (uint16_t)0x01FF);*/
+				char c;
+				while(!UART_data_ready(stdin_usart));	//Blocant.
+				c = UART_get_next_byte(stdin_usart);
 				*ptr++ = c;
 				num++;
 			}
@@ -376,31 +390,6 @@ int _read(int file, char *ptr, int len) {
 	}
 	return num;
 }
-
-//Appelï¿½e par un printf
-int _write(int file, char *ptr, int len)
-{
-	int i;
-	switch (file)
-	{
-		case 0:
-		case 1:
-			for (i = 0; i < len; ++i)
-				UART_write_stdout(*ptr++);
-			return len;
-			break;
-		case 2:  //stderr = problï¿½me (entre autre trap_handler) donc pas de buffering
-			for (i = 0; i < len; ++i)
-				UART_write_sterr(*ptr++);
-			return len;
-			break;
-		default:
-			return 0;
-			break;
-	}
-	return 0;
-}
-
 
 /*
  stat
@@ -442,7 +431,37 @@ int _wait(int *status) {
 	return -1;
 }
 
-
+/*
+ write
+ Write a character to a file. `libc' subroutines will use this system routine for output to all files, including stdout
+ Returns -1 on error or number of bytes sent
+ */
+__attribute__((weak))
+int _write(int file, char *ptr, int len) {
+	int n;
+	switch (file) {
+		case STDOUT_FILENO: /*stdout*/
+			for (n = 0; n < len; n++)
+			{
+				//while ((stdout_usart->SR & USART_FLAG_TC) == (uint16_t)RESET);
+				//stdout_usart->DR = (*ptr++ & (uint16_t)0x01FF);
+				UART_putc(stdout_usart,*ptr++);
+			}
+			break;
+		case STDERR_FILENO: /* stderr */
+			for (n = 0; n < len; n++)
+			{
+				//while ((stderr_usart->SR & USART_FLAG_TC) == (uint16_t)RESET);
+				//stderr_usart->DR = (*ptr++ & (uint16_t)0x01FF);
+				UART_putc(stderr_usart,*ptr++);
+			}
+			break;
+		default:
+			errno = EBADF;
+			return -1;
+	}
+	return len;
+}
 
 void assert_failed(uint8_t* file, uint32_t line)
 {
@@ -624,9 +643,9 @@ void PendSV_Handler(void)
 
 
 static callback_fun_t usr_systick_handler = NULL;
+
 /*
-void SysTick_Handler(void)
-{
+void SysTick_Handler(void){
 	HAL_IncTick();
 	if(usr_systick_handler)
 		(*usr_systick_handler)();

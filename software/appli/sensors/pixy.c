@@ -169,13 +169,16 @@ static int pixy_add_datas_to_send_in_buffer(uint8_t *data, int len);
 void pixy_process_ms(void)
 {
 	uint16_t word16;
-	uint8_t w = 0;
+	uint8_t w = 1;
 	pixy_add_datas_to_send_in_buffer(&w, 1);
 	word16 = pixy_spi_exchange_word();
 	pixy_parse_msg(word16);
 
 	if(t)
 		t--;
+
+
+
 }
 
 /*
@@ -223,15 +226,18 @@ void pixy_process_main(void)
 {
 	uint8_t w = 0;
 	pixy_add_datas_to_send_in_buffer(&w, 1);
+
 	static bool_e blue = FALSE;
-/*
+	//SetLED(1, 1, 0);
+
+
 	if(!t)
 	{
 		t = 1000;
 		blue = !blue;
 		SetLED(1, 1, blue);
 	}
-*/
+
 
 }
 

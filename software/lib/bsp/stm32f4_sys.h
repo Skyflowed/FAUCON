@@ -14,7 +14,7 @@
 	#include "stm32f4xx_hal.h"
 	#include "stm32f4_uart.h"
 	void SYS_init(void);
-	void SYS_set_std_usart(UART_id_e in, UART_id_e out, UART_id_e err);
+	void SYS_set_std_usart(uart_id_e in, uart_id_e out, uart_id_e err);
 
 
 	typedef void(*callback_fun_t)(void);

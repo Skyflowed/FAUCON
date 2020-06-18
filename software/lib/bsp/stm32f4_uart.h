@@ -1,28 +1,15 @@
-/*
- *	Club Robot ESEO 2008 - 2015
- *	Archi-Tech' / Pierre & Guy / Holly & Wood
+/**
+ * UART.h
  *
- *	Fichier : QS_uart.h
- *	Package : Qualite Soft
- *	Description : fonction d'utilisation des uart pour
- *				interfacage rs232
- *	Auteur : Jacen / Alexis / Nirgal
- *	Licence : CeCILL-C (voir LICENCE.txt)
- *	Version 20100924
+ *  Created on: 29 oct. 2013
+ *      Author: spoiraud
  */
 
-/** ----------------  Defines possibles  --------------------
- *	USE_UARTx					: Active l'utilisation de l'UART n°x [1..6]
- *
- *
- */
+#ifndef UART_H_
+#define UART_H_
 
-#ifndef QS_UART_H
-	#define QS_UART_H
-	#include "stm32f4xx_hal.h"
-	#include "config.h"
-
-	typedef void (*UART_dataReceiver)(Uint8 byte);
+#include "stm32f4xx_hal.h"
+	#include "macro_types.h"
 
 	typedef enum
 	{
@@ -33,26 +20,28 @@
 		UART5_ID,
 		UART6_ID,
 		UART_ID_NB
-	}UART_id_e;
+	}uart_id_e;
+
+	//Initialise l'UART uart_id
+	void UART_init(uart_id_e uart_id, uint32_t baudrate);
+
+	//Deinitialise l'UART uart_id
+	void UART_DeInit(uart_id_e uart_id);
+
+	//Renvoi le dernier caractere recu ou 0 si pas de caractere disponible
+	uint8_t UART_getc(uart_id_e uart_id);
+
+	//Envoi d'un caractere sur l'UART uart_id
+	void UART_putc(uart_id_e uart_id, uint8_t c);
+
+	//Pour savoir si une donnée a été reçue sur l'UART uart_id
+	bool_e UART_data_ready(uart_id_e uart_id);
+
+	//Pour lire la dernière donnée reçue sur l'UART uart_id
+	uint8_t UART_get_next_byte(uart_id_e uart_id);
+
+	//Fonction blocante de test pour montrer une utilisation de ce module logiciel
+	void UART_test(void);
 
 
-	void UART_init(void);										//initialiser tout les uart définis
-	void UART_deinit(void);
-	void UART_init_id(UART_id_e id, uint32_t baudrate, bool_e flowControl, Uint8 irqPreemptionPriority);			//initialiser manuellement un uart spécifique
-	void UART_setReceiveCallback(UART_id_e id, UART_dataReceiver function);
-	void UART_setSendCallback(UART_id_e id, UART_dataReceiver function);
-	void UART_set_std(UART_id_e in, UART_id_e out, UART_id_e err);	//modifier l'entrée où la sortie standard
-	void UART_deinit_id(UART_id_e id);
-
-
-	Uint32 UART_data_ready(UART_id_e id);							//récupérer le nombre d'octets disponibles
-	Uint8 UART_get_next_msg(UART_id_e id);							//récupérer un octet (0 si pas d'octet dispo)
-	void UART_putc(UART_id_e id, Uint8 c);							//envoyer octet
-	void UART_puts(UART_id_e id, Uint8 * str);						//envoyer une chaine de caractères
-	void UART_send_datas(UART_id_e id, Uint8 * datas, Uint32 len);	//envoyer un tableau de len octets
-
-	char UART_read_stdin(void);
-	void UART_write_stdout(char c);
-	void UART_write_sterr(char c);
-
-#endif /* ndef QS_UART_H */
+#endif /* UART_H_ */

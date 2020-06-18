@@ -1,606 +1,408 @@
-/*
- *	Club Robot ESEO 2008 - 2015
- *	Archi-Tech', Pierre & Guy, Holly & Wood
+/**
+ * Uart.c
  *
- *	Fichier : QS_uart.c
- *	Package : Qualite Soft
- *	Description : fonction d'utilisation des uart pour
- *					interfacage rs232
- *	Auteur : Jacen / Alexis / Nirgal
- *	Licence : CeCILL-C (voir LICENCE.txt)
- *	Version 20100924
+ * 
+ *  Created on: 9 sept. 2013
+ *  Modified : 9 mars 2016 -> add interrupt support & comments.
+ *      Author: tbouvier, spoiraud
+ *
  */
 
-#include "stm32f4_uart.h"
 #include "stm32f4xx_hal.h"
-#include "config.h"
+#include "stm32f4_uart.h"
 #include "stm32f4_gpio.h"
-#include <stdio.h>
+#include "macro_types.h"
 
-//*************************************************************************************************************************
-//*************************************************      Define      ******************************************************
-//*************************************************************************************************************************
+/*
+ * Ce module logiciel permet l'utilisation des périphériques USART (Universal Synchronous/Asynchronous Receiver Transmitter)
+ *
+ * 	Un module UART permet d'envoyer des données (i.e. des octets) sur une "liaison série", c'est à dire sur un fil.
+ * 	Les octets ainsi envoyés sont découpés en bits. Chaque bit est envoyé pendant une période fixée.
+ *
+ * 	Selon l'UART choisi, les broches correspondantes sont initialisées et réservé pour cet usage :
+ * 	USART1 : Rx=PC7 et Tx=PB6,   	init des horloges du GPIOB et de l'USART1.
+ * 	USART2 : Rx=PC3 et Tx=PA2, 		init des horloges du GPIOA et de l'USART2.
+ * 	USART3 : Rx=PD9 et Tx=PD8, 		init des horloges du GPIOD et de l'USART3.
+ * 	UART4  : Rx=PC11 et Tx=PC10, 	init des horloges du GPIOC et de l'UART4.
+ * 	UART5  : Rx=PD2 et Tx=PC12, 	init des horloges des GPIOC et D et de l'UART5.
+ * 	USART6 : Rx=PC7 et Tx=PC6, 		init des horloges du GPIOC et de l'USART6.
+ *
+ * 	On parle de liaison série asynchrone lorsqu'aucune horloge n'accompagne la donnée pour indiquer à celui qui la reçoit l'instant où le bit est transmis.
+ * 	Dans ces conditions, il faut impérativement que le récepteur sâche à quelle vitesse précise les données sont transmises.
+ * 	Il "prend alors en photo" chaque bit, et reconstitue les octets.
+ *
+ * 	Au repos, la tension de la liaison série est à l'état logique '1'.
+ * 	Pour chaque octets à envoyer, l'UART envoie en fait 10 bits : 1 bit de start (toujours à 0), 8 bits de données, 1 bit de stop (toujours à 1).
+ * 	Ce passage par 0 avant l'envoi des données permet au récepteur de comprendre que l'on va transmettre un octet. (sinon il ne saurait détecter le début d'un octet commencant par le bit '1' !)
+ *
+ * 	Voici un exemple d'utilisation de ce module logiciel.
+ *
+ * 	si on souhaite initialiser l'UART1, à une vitesse de 115200 bits par seconde, puis envoyer et recevoir des données sur cette liaison.
+ *  Un exemple est également disponible dans la fonction UART_test()
+ *
+ * 	1-> Appeler la fonction UART_init(UART1_ID, 115200);
+ * 	2-> Pour envoyer un octet 'A' sur l'UART1 : UART_putc(UART1_ID, 'A');
+ * 	3-> Pour recevoir les octets qui auraient été reçus par l'UART1 :
+ * 			if(UART_data_ready(UART1_ID))
+ * 			{
+ * 				uint8_t c;
+ * 				c = UART_get_next_byte(UART1_ID);
+ * 				//On peut faire ce qu'on souhaite avec l'octet c récupéré.
+ * 			}
+ *
+ * 	4-> Il est également possible de profiter de la richesse proposée par la fonction printf... qui permet d'envoyer un texte 'variable', constitué avec une chaine de format et des paramètres.
+ * 			Pour cela :
+ * 			Appelez au moins une fois, lors de l'initialisation, la fonction
+ * 				SYS_set_std_usart(UART1_ID, UART1_ID, UART1_ID);   //indique qu'il faut utiliser l'UART1 pour sortir les données du printf.
+ * 			Puis :
+ * 				uint32_t millivolt = 3245;	//une façon éléguante d'exprimer le nombre 3,245 Volts
+ * 				printf("Bonjour le monde, voici un joli nombre à virgule : %d,%03d V\n", millivolt/1000, millivolt%1000);
+ *
+ */
 
-#ifndef USE_UART1
-	#define USE_UART1	0
-#endif
-#ifndef USE_UART2
-	#define USE_UART2	0
-#endif
-#ifndef USE_UART3
-	#define USE_UART3	0
-#endif
-#ifndef USE_UART4
-	#define USE_UART4	0
-#endif
-#ifndef USE_UART5
-	#define USE_UART5	0
-#endif
-#ifndef USE_UART6
-	#define USE_UART6	0
-#endif
-
-#ifndef UART1_BAUDRATE
-	#define UART1_BAUDRATE 115200
-#endif
-#ifndef UART2_BAUDRATE
-	#define UART2_BAUDRATE 115200
-#endif
-#ifndef UART3_BAUDRATE
-	#define UART3_BAUDRATE 115200
-#endif
-#ifndef UART4_BAUDRATE
-	#define UART4_BAUDRATE 115200
-#endif
-#ifndef UART5_BAUDRATE
-	#define UART5_BAUDRATE 115200
-#endif
-#ifndef UART6_BAUDRATE
-	#define UART6_BAUDRATE 115200
-#endif
-
-#ifndef USART_1_IT_PRIORITY
-	#define USART_1_IT_PRIORITY 3
-#endif
-#ifndef USART_2_IT_PRIORITY
-	#define USART_2_IT_PRIORITY 3
-#endif
-#ifndef USART_3_IT_PRIORITY
-	#define USART_3_IT_PRIORITY 3
-#endif
-#ifndef USART_4_IT_PRIORITY
-	#define USART_4_IT_PRIORITY 3
-#endif
-#ifndef USART_5_IT_PRIORITY
-	#define USART_5_IT_PRIORITY 3
-#endif
-#ifndef USART_6_IT_PRIORITY
-	#define USART_6_IT_PRIORITY 3
-#endif
-
-#ifndef USART_1_FLOW_CONTROL
-	#define USART_1_FLOW_CONTROL 0
-#endif
-#ifndef USART_2_FLOW_CONTROL
-	#define USART_2_FLOW_CONTROL 0
-#endif
-#ifndef USART_3_FLOW_CONTROL
-	#define USART_3_FLOW_CONTROL 0
-#endif
-#ifndef USART_4_FLOW_CONTROL
-	#define USART_4_FLOW_CONTROL 0
-#endif
-#ifndef USART_5_FLOW_CONTROL
-	#define USART_5_FLOW_CONTROL 0
-#endif
-#ifndef USART_6_FLOW_CONTROL
-	#define USART_6_FLOW_CONTROL 0
-#endif
-
-//TODO reparcourir tout les USE_UART pour les définir à 1
-//TODO : redéfinir les macros UART_FOR_PRINTF à USART1 au lieu de 1
-#undef USART_FOR_PRINTF
-
-#ifndef USART_FOR_PRINTF
-	#define USART_FOR_PRINTF		USART1	//Default uart for output : 1.
-#endif
-
-#ifndef RX_BUFFER_SIZE
-	#define RX_BUFFER_SIZE 1024
-#endif
-
-#ifndef TX_BUFFER_SIZE
-	#define TX_BUFFER_SIZE 1024
-#endif
-
-#if (RX_BUFFER_SIZE & RX_BUFFER_SIZE-1)
-	#warning "RX_BUFFER_SIZE doit être une puissance de 2, parce que c'est mieux ainsi."
-#endif
-#if (TX_BUFFER_SIZE & TX_BUFFER_SIZE-1)
-	#warning "TX_BUFFER_SIZE doit être une puissance de 2, parce que c'est mieux ainsi."
-#endif
-
-#define USE_UART_NB (USE_UART1 + USE_UART2 + USE_UART3 + USE_UART4 + USE_UART5 + USE_UART6)
-
-//*************************************************************************************************************************
-//**************************************************      Type      *******************************************************
-//*************************************************************************************************************************
-
-typedef struct
-{
-	Uint8 buffer_rx[RX_BUFFER_SIZE];
-	Uint8 buffer_tx[TX_BUFFER_SIZE];
-	bool_e used;
-}buffers_t;
-
-typedef struct
-{
-	Uint32 rx_index_in;	//index des données qui entrent dans le buffer
-	Uint32 rx_index_out;	//index des données qui sont sorties du buffer
-	bool_e rx_max_occupation;
-	Uint8 * prxbuf;
-	Uint32 tx_index_in;
-	Uint32 tx_index_out;
-	bool_e tx_max_occupation;
-	Uint8 * ptxbuf;
-	UART_dataReceiver callback_receive;	//fonction de callback appelée à chaque caractère reçu
-	UART_dataReceiver callback_send;	//fonction de callback appelée à chaque caractère émis
-	Uint8 buffer_id;
-	bool_e initialized;
-	bool_e reentrance_detection_putc;
-}UART_handler_t;
-
-//*************************************************************************************************************************
-//************************************************      Prototype      *****************************************************
-//*************************************************************************************************************************
-
-static bool_e UART_process_irq(UART_id_e id);
-static void UART_ports_init(void);
-
-//*************************************************************************************************************************
-//********************************************      Variable globale      *************************************************
-//*************************************************************************************************************************
+//Les buffers de réception accumulent les données reçues, dans la limite de leur taille.
+//Ces buffers sont libérés des données dès qu'on les consulte.
+//la taille de ce buffer doit tenir sur un uint8_t
+#define BUFFER_RX_SIZE	128
 
 static UART_HandleTypeDef UART_HandleStructure[UART_ID_NB];	//Ce tableau contient les structures qui sont utilisées pour piloter chaque UART avec la librairie HAL.
 const USART_TypeDef * instance_array[UART_ID_NB] = {USART1, USART2, USART3, UART4, UART5, USART6};
 const IRQn_Type nvic_irq_array[UART_ID_NB] = {USART1_IRQn, USART2_IRQn, USART3_IRQn, UART4_IRQn, UART5_IRQn, USART6_IRQn};
 
+//Buffers
+static uint8_t buffer_rx[UART_ID_NB][BUFFER_RX_SIZE];
+static uint8_t buffer_rx_write_index[UART_ID_NB] = {0};
+static uint8_t buffer_rx_read_index[UART_ID_NB] = {0};
+static volatile bool_e buffer_rx_data_ready[UART_ID_NB];
+// ligne du dessous à rajouter !
+static volatile bool_e uart_initialized[UART_ID_NB] = {FALSE};
 
-//const uint32_t rcc_uarts[UART_ID_NB] = { RCC_APB2Periph_USART1,RCC_APB1Periph_USART2, RCC_APB1Periph_USART3, RCC_APB1Periph_UART4, RCC_APB1Periph_UART5, RCC_APB2Periph_USART6};
-const IRQn_Type irqn[UART_ID_NB] = {USART1_IRQn, USART2_IRQn, USART3_IRQn, UART4_IRQn, UART5_IRQn, USART6_IRQn};
-USART_TypeDef * uarts[UART_ID_NB] = { USART1, USART2, USART3, UART4, UART5, USART6};
-
-static volatile UART_handler_t handlers[UART_ID_NB];
-static volatile bool_e initialized = FALSE;
-static volatile UART_id_e uart_for_stdin_id;
-static volatile UART_id_e uart_for_stdout_id;
-static volatile UART_id_e uart_for_stderr_id;
-
-static volatile buffers_t buffers[USE_UART_NB];
-
-void UART_init(void)
-{
-	if(!initialized)
-	{
-		initialized = TRUE;
-		uart_for_stdout_id = DEFAULT_PRINTF_UART;	//par défaut
-		uart_for_stdin_id = DEFAULT_PRINTF_UART;
-		uart_for_stderr_id = DEFAULT_PRINTF_UART;
-
-		UART_ports_init();
-
-		#if USE_UART1
-			UART_init_id(UART1_ID, UART1_BAUDRATE, USART_1_FLOW_CONTROL, USART_1_IT_PRIORITY);
-		#endif
-		#if USE_UART2
-			UART_init_id(UART2_ID, UART2_BAUDRATE, USART_2_FLOW_CONTROL, USART_2_IT_PRIORITY);
-		#endif
-		#if USE_UART3
-			UART_init_id(UART3_ID, UART3_BAUDRATE, USART_3_FLOW_CONTROL, USART_3_IT_PRIORITY);
-		#endif
-		#if USE_UART4
-			UART_init_id(UART4_ID, UART4_BAUDRATE, USART_4_FLOW_CONTROL, USART_4_IT_PRIORITY);
-		#endif
-		#if USE_UART5
-			UART_init_id(UART5_ID, UART5_BAUDRATE, USART_5_FLOW_CONTROL, USART_5_IT_PRIORITY);
-		#endif
-		#if USE_UART6
-			UART_init_id(UART6_ID, UART6_BAUDRATE, USART_6_FLOW_CONTROL, USART_6_IT_PRIORITY);
-		#endif
-
-	}
-}
-
-static void UART_ports_init(void)
-{
-#if USE_UART1
-	__HAL_RCC_GPIOB_CLK_ENABLE();		//Horloge des broches a utiliser
-	BSP_GPIO_PinCfg(GPIOB, GPIO_PIN_6, GPIO_MODE_AF_PP, GPIO_PULLUP, GPIO_SPEED_FAST, GPIO_AF7_USART1); //Configure Tx as AF
-	BSP_GPIO_PinCfg(GPIOB, GPIO_PIN_7, GPIO_MODE_AF_PP, GPIO_PULLUP, GPIO_SPEED_FAST, GPIO_AF7_USART1); //Configure Rx as AF
-	__HAL_RCC_USART1_CLK_ENABLE();		//Horloge du peripherique UART
-#endif
-#if USE_UART2
-	__HAL_RCC_GPIOA_CLK_ENABLE();		//Horloge des broches a utiliser
-	BSP_GPIO_PinCfg(GPIOA, GPIO_PIN_2, GPIO_MODE_AF_PP, GPIO_PULLUP, GPIO_SPEED_FAST, GPIO_AF7_USART2);	//Configure Tx as AF
-	BSP_GPIO_PinCfg(GPIOA, GPIO_PIN_3, GPIO_MODE_AF_PP, GPIO_PULLUP, GPIO_SPEED_FAST, GPIO_AF7_USART2); //Configure Rx as AF
-	__HAL_RCC_USART2_CLK_ENABLE();		//Horloge du peripherique UART
-#endif
-#if USE_UART3
-	__HAL_RCC_GPIOD_CLK_ENABLE();		//Horloge des broches a utiliser
-	BSP_GPIO_PinCfg(GPIOD, GPIO_PIN_8, GPIO_MODE_AF_PP, GPIO_PULLUP, GPIO_SPEED_FAST, GPIO_AF7_USART2);	//Configure Tx as AF
-	BSP_GPIO_PinCfg(GPIOD, GPIO_PIN_9, GPIO_MODE_AF_PP, GPIO_PULLUP, GPIO_SPEED_FAST, GPIO_AF7_USART2); //Configure Rx as AF
-	__HAL_RCC_USART3_CLK_ENABLE();		//Horloge du peripherique UART
-#endif
-#if USE_UART4
-	__HAL_RCC_GPIOC_CLK_ENABLE();		//Horloge des broches a utiliser
-	BSP_GPIO_PinCfg(GPIOC, GPIO_PIN_10, GPIO_MODE_AF_PP, GPIO_PULLUP, GPIO_SPEED_FAST, GPIO_AF7_USART2);	//Configure Tx as AF
-	BSP_GPIO_PinCfg(GPIOC, GPIO_PIN_11, GPIO_MODE_AF_PP, GPIO_PULLUP, GPIO_SPEED_FAST, GPIO_AF7_USART2); //Configure Rx as AF
-	__HAL_RCC_UART4_CLK_ENABLE();		//Horloge du peripherique UART
-#endif
-#if USE_UART5
-	__HAL_RCC_GPIOC_CLK_ENABLE();		//Horloge des broches a utiliser
-	__HAL_RCC_GPIOD_CLK_ENABLE();		//Horloge des broches a utiliser
-	BSP_GPIO_PinCfg(GPIOC, GPIO_PIN_12, GPIO_MODE_AF_PP, GPIO_PULLUP, GPIO_SPEED_FAST, GPIO_AF7_USART2);	//Configure Tx as AF
-	BSP_GPIO_PinCfg(GPIOD, GPIO_PIN_2, GPIO_MODE_AF_PP, GPIO_PULLUP, GPIO_SPEED_FAST, GPIO_AF7_USART2); //Configure Rx as AF
-	__HAL_RCC_UART5_CLK_ENABLE();		//Horloge du peripherique UART
-#endif
-#if USE_UART6
-	__HAL_RCC_GPIOC_CLK_ENABLE();		//Horloge des broches a utiliser
-	BSP_GPIO_PinCfg(GPIOC, GPIO_PIN_6, GPIO_MODE_AF_PP, GPIO_PULLUP, GPIO_SPEED_FAST, GPIO_AF8_USART6); //Configure Tx as AF
-	BSP_GPIO_PinCfg(GPIOC, GPIO_PIN_7, GPIO_MODE_AF_PP, GPIO_PULLUP, GPIO_SPEED_FAST, GPIO_AF8_USART6); //Configure Rx as AF
-	__HAL_RCC_USART6_CLK_ENABLE();		//Horloge du peripherique UART
-#endif
-}
-void UART_deinit(void)
-{
-	UART_id_e id;
-	for(id = 0; id<UART_ID_NB; id++)
-		UART_deinit_id(id);
-	initialized = FALSE;
-}
-
-void UART_init_id(UART_id_e id, uint32_t baudrate, bool_e flowControl, Uint8 irqPreemptionPriority)
-{
-	if(initialized && handlers[id].initialized == FALSE)
-	{
-		for(Uint8 i = 0; i<USE_UART_NB; i++)
-		{	//recherche d'un couple de buffer disponibles
-			if(buffers[i].used == FALSE)
-			{
-				handlers[id].rx_index_in = 0;
-				handlers[id].rx_index_out = 0;
-				handlers[id].rx_max_occupation = 0;
-				handlers[id].tx_index_in = 0;
-				handlers[id].tx_index_out = 0;
-				handlers[id].tx_max_occupation = 0;
-				handlers[id].callback_receive = NULL;
-				handlers[id].callback_send = NULL;
-				handlers[id].initialized = TRUE;
-
-				//On associe les buffers à l'UART initialisé
-				buffers[i].used = TRUE;
-				handlers[id].buffer_id = i;	//on conserve l'index des buffers choisis
-				handlers[id].prxbuf = (Uint8 *)buffers[i].buffer_rx;
-				handlers[id].ptxbuf = (Uint8 *)buffers[i].buffer_tx;
-
-				UART_HandleStructure[id].Instance = (USART_TypeDef*)instance_array[id];
-				UART_HandleStructure[id].Init.BaudRate = baudrate;
-				UART_HandleStructure[id].Init.WordLength = UART_WORDLENGTH_8B;//
-				UART_HandleStructure[id].Init.StopBits = UART_STOPBITS_1;//
-				UART_HandleStructure[id].Init.Parity = UART_PARITY_NONE;//
-				UART_HandleStructure[id].Init.HwFlowCtl = UART_HWCONTROL_NONE;//
-				UART_HandleStructure[id].Init.Mode = UART_MODE_TX_RX;//
-				UART_HandleStructure[id].Init.OverSampling = UART_OVERSAMPLING_8;//
-
-				/*On applique les parametres d'initialisation ci-dessus */
-				HAL_UART_Init(&UART_HandleStructure[id]);
-
-				/*Activation de l'UART */
-				__HAL_UART_ENABLE(&UART_HandleStructure[id]);
-
-				// On fixe les priorités des interruptions de usart6 PreemptionPriority = 0, SubPriority = 1 et on autorise les interruptions
-				HAL_NVIC_SetPriority(nvic_irq_array[id] , irqPreemptionPriority, 1);
-				HAL_NVIC_EnableIRQ(nvic_irq_array[id]);
-
-
-/*
- * 				//on initialise le périphérique
-				if(id == UART1_ID || id == UART6_ID)
-					RCC_APB2PeriphClockCmd(rcc_uarts[id], ENABLE);
-				else if(id < UART_ID_NB)
-					RCC_APB1PeriphClockCmd(rcc_uarts[id], ENABLE);
-
-				USART_OverSampling8Cmd((USART_TypeDef *)uarts[id], ENABLE);
-				USART_InitTypeDef USART_InitStructure;
-				USART_InitStructure.USART_BaudRate = baudrate;
-				USART_InitStructure.USART_WordLength = USART_WordLength_8b;
-				USART_InitStructure.USART_StopBits = USART_StopBits_1;
-				USART_InitStructure.USART_Parity = USART_Parity_No;
-
-				USART_InitStructure.USART_Mode = USART_Mode_Rx | USART_Mode_Tx;
-
-				if(flowControl){
-					USART_InitStructure.USART_HardwareFlowControl = USART_HardwareFlowControl_RTS_CTS;
-				}else{
-					USART_InitStructure.USART_HardwareFlowControl = USART_HardwareFlowControl_None;
-				}
-
-				USART_Init((USART_TypeDef *)uarts[id], &USART_InitStructure);
-
-				NVIC_InitTypeDef NVIC_InitStructure;
-				NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0;
-				NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
-				NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = irqPreemptionPriority;
-				NVIC_InitStructure.NVIC_IRQChannel = irqn[id];
-				NVIC_Init(&NVIC_InitStructure);
-				USART_ITConfig((USART_TypeDef *)uarts[id], USART_IT_RXNE, ENABLE);
-
-				USART_Cmd((USART_TypeDef *)uarts[id], ENABLE);
-*/
-
-
-
-				break;
-			}
-		}
-	}
-}
-
-//TODO modifier les appels à cette fonction
-/*
- * @post Attention, cette fonction de callback sera appelée en IT uart, Assumez qu'elle soit courte et qu'il n'y aura pas de pb de préemption !
+/**
+ * @brief	Initialise l'USARTx - 8N1 - vitesse des bits (baudrate) indiqué en paramètre
+ * @func	void UART_init(uint8_t uart_id, uart_interrupt_mode_e mode)
+ * @param	uart_id est le numéro de l'UART concerné.
+ * @post	Cette fonction initialise les broches suivante selon l'USART choisit en parametre :
+ *			 	USART1 : Rx=PC7 et Tx=PB6,   	init des horloges du GPIOB et de l'USART1.
+ * 				USART2 : Rx=PC3 et Tx=PA2, 		init des horloges du GPIOA et de l'USART2.
+ * 				USART3 : Rx=PD9 et Tx=PD8, 		init des horloges du GPIOD et de l'USART3.
+ * 				UART4  : Rx=PC11 et Tx=PC10, 	init des horloges du GPIOC et de l'UART4.
+ * 				UART5  : Rx=PD2 et Tx=PC12, 	init des horloges des GPIOC et D et de l'UART5.
+ * 				USART6 : Rx=PC7 et Tx=PC6, 		init des horloges du GPIOC et de l'USART6.
+ * 				La gestion des envois et reception se fait en interruption.
+ *
  */
-void UART_setReceiveCallback(UART_id_e id, UART_dataReceiver function){
-	assert(id > 0 && id < UART_ID_NB);
-	handlers[id].callback_receive = function;
-}
-
-void UART_setSendCallback(UART_id_e id, UART_dataReceiver function){
-	assert(id > 0 && id < UART_ID_NB);
-	handlers[id].callback_send = function;
-}
-
-void UART_set_std(UART_id_e in, UART_id_e out, UART_id_e err)
+void UART_init(uart_id_e uart_id, uint32_t baudrate)
 {
-	uart_for_stdout_id = out;
-	uart_for_stdin_id = in;
-	uart_for_stderr_id = err;
+	assert(baudrate > 1000);
+	assert(uart_id < UART_ID_NB);
+
+	buffer_rx_read_index[uart_id] = 0;
+	buffer_rx_write_index[uart_id] = 0;
+	buffer_rx_data_ready[uart_id] = FALSE;
+	/* USARTx configured as follow:
+		- Word Length = 8 Bits
+		- One Stop Bit
+		- No parity
+		- Hardware flow control disabled (RTS and CTS signals)
+		- Receive and transmit enabled
+		- OverSampling: enable
+	*/
+	UART_HandleStructure[uart_id].Instance = (USART_TypeDef*)instance_array[uart_id];
+	UART_HandleStructure[uart_id].Init.BaudRate = baudrate;
+	UART_HandleStructure[uart_id].Init.WordLength = UART_WORDLENGTH_8B;//
+	UART_HandleStructure[uart_id].Init.StopBits = UART_STOPBITS_1;//
+	UART_HandleStructure[uart_id].Init.Parity = UART_PARITY_NONE;//
+	UART_HandleStructure[uart_id].Init.HwFlowCtl = UART_HWCONTROL_NONE;//
+	UART_HandleStructure[uart_id].Init.Mode = UART_MODE_TX_RX;//
+	UART_HandleStructure[uart_id].Init.OverSampling = UART_OVERSAMPLING_8;//
+
+	/*On applique les parametres d'initialisation ci-dessus */
+	HAL_UART_Init(&UART_HandleStructure[uart_id]);
+	
+	/*Activation de l'UART */
+	__HAL_UART_ENABLE(&UART_HandleStructure[uart_id]);
+
+	// On fixe les priorités des interruptions de usart6 PreemptionPriority = 0, SubPriority = 1 et on autorise les interruptions
+	HAL_NVIC_SetPriority(nvic_irq_array[uart_id] , 0, 1);
+	HAL_NVIC_EnableIRQ(nvic_irq_array[uart_id]);
+	HAL_UART_Receive_IT(&UART_HandleStructure[uart_id],&buffer_rx[uart_id][buffer_rx_write_index[uart_id]],1);	//Activation de la réception d'un caractère
+
+	//Config LibC: no buffering
+	setvbuf(stdout, NULL, _IONBF, 0 );
+	setvbuf(stderr, NULL, _IONBF, 0 );
+	setvbuf(stdin, NULL, _IONBF, 0 );
+	// ligne du dessous à rajouter !
+	uart_initialized[uart_id] = TRUE;
+
 }
 
-void UART_deinit_id(UART_id_e id){
+
+void UART_DeInit(uart_id_e uart_id)
+{
+	assert(uart_id < UART_ID_NB);
+	HAL_NVIC_DisableIRQ(nvic_irq_array[uart_id]);
+	HAL_UART_DeInit(&UART_HandleStructure[uart_id]);
+	// ligne du dessous à rajouter !
+	uart_initialized[uart_id] = FALSE;
+}
+
 /*
-	if(id == UART1_ID || id == UART6_ID)
-		RCC_APB2PeriphClockCmd(rcc_uarts[id], DISABLE);
-	else if(id < UART_ID_NB)
-		RCC_APB1PeriphClockCmd(rcc_uarts[id], DISABLE);
-*/
-	if(handlers[id].initialized)
-	{
-		//on dissocie les buffers
-		buffers[handlers[id].buffer_id].used = FALSE;
-		handlers[id].initialized = FALSE;
-	}
+ * Retourne VRAI si un ou des caractères sont disponibles dans le buffer.
+ * Retourne FAUX si aucun caractère n'est disponible dans le buffer (le buffer est vide)
+ */
+bool_e UART_data_ready(uart_id_e uart_id)
+{
+	assert(uart_id < UART_ID_NB);
+	return buffer_rx_data_ready[uart_id];
 }
 
-
-Uint32 UART_data_ready(UART_id_e id)
+/*
+ * @ret Retourne le prochain caractère reçu. Ou 0 si rien n'a été reçu.
+ * @post 	Le caractère renvoyé par cette fonction ne sera plus renvoyé.
+ */
+uint8_t UART_get_next_byte(uart_id_e uart_id)
 {
-	Uint32 ret = 0;
-	Uint32 in, out;
-	if(handlers[id].initialized)
-	{
-		NVIC_DisableIRQ(irqn[id]);
-			//section critique ////////////////
-			in = handlers[id].rx_index_in;
-			//section critique ///////////////
-		NVIC_EnableIRQ(irqn[id]);
-		out = handlers[id].rx_index_out;
-	}
-		ret = out-in;
+	uint8_t ret;
+	assert(uart_id < UART_ID_NB);
+
+	if(!buffer_rx_data_ready[uart_id])	//N'est jamais sensé se produire si l'utilisateur vérifie que UART_data_ready() avant d'appeler UART_get_next_byte()
+		return 0;
+
+	ret =  buffer_rx[uart_id][buffer_rx_read_index[uart_id]];
+	buffer_rx_read_index[uart_id] = (buffer_rx_read_index[uart_id] + 1) % BUFFER_RX_SIZE;
+
+	//Section critique durant laquelle on désactive les interruptions... pour éviter une mauvaise préemption.
+	NVIC_DisableIRQ(nvic_irq_array[uart_id]);
+	if (buffer_rx_write_index[uart_id] == buffer_rx_read_index[uart_id])
+		buffer_rx_data_ready[uart_id] = FALSE;
+	NVIC_EnableIRQ(nvic_irq_array[uart_id]);
 	return ret;
 }
 
-Uint8 UART_get_next_msg(UART_id_e id)
-{
-	Uint8 ret = 0;
-	if(handlers[id].initialized)
-	{
-		uint32_t out, in;
-		out = handlers[id].rx_index_out;
-		NVIC_DisableIRQ(irqn[id]);
-			//section critique ////////////////
-			in = handlers[id].rx_index_in;
-			//section critique ///////////////
-		NVIC_EnableIRQ(irqn[id]);
-		handlers[id].rx_max_occupation = MAX(handlers[id].rx_max_occupation, out-in);
-		if(out < in)
-		{
-			ret = handlers[id].prxbuf[out % RX_BUFFER_SIZE];
-			handlers[id].rx_index_out = out+1;
-		}
-		if(handlers[id].rx_max_occupation > RX_BUFFER_SIZE)
-		{
-			printf("WARNING : Buffer overflow on uart%d", id);
-		}
-	}
-	return ret;
-}
 
-/*
- * @pre : JAMAIS de UART_putc dans une IT plus prioritaire que l'IT de l'UART...
+/**
+ * @brief	Fonction NON blocante qui retourne le dernier caractere reçu sur l'USARTx. Ou 0 si pas de caractere reçu.
+ * @func 	char UART_getc(uart_id_e uart_id))
+ * @param	UART_Handle : UART_Handle.Instance = USART1, USART2 ou USART6
+ * @post	Si le caractere reçu est 0, il n'est pas possible de faire la difference avec le cas où aucun caractere n'est reçu.
+ * @ret		Le caractere reçu, sur 8 bits.
  */
-void UART_putc(UART_id_e id, Uint8 c)
+uint8_t UART_getc(uart_id_e uart_id)
 {
-	if(handlers[id].reentrance_detection_putc)	//Si printf en IT pendant un printf, on abandonne le caractère du printf en IT..
-		return;
-	handlers[id].reentrance_detection_putc = TRUE;
+	return UART_get_next_byte(uart_id);
+	uint8_t c;
 
-	Uint32 in, out;
-	in = handlers[id].tx_index_in;
-	out = handlers[id].tx_index_out;
-
-	while(in-out >= TX_BUFFER_SIZE)
-	{
-		out = handlers[id].tx_index_out;
-	}
-
-	NVIC_DisableIRQ(irqn[id]);
-	//section critique
-		handlers[id].ptxbuf[in % RX_BUFFER_SIZE] = c;
-		handlers[id].tx_index_in = in + 1;
-
-		//USART_ITConfig((USART_TypeDef *)uarts[id], USART_IT_TXE, ENABLE);
-		uarts[id]->CR1 |= USART_IT_TXE & USART_IT_MASK;
-
-	//section critique
-	NVIC_EnableIRQ(irqn[id]);
-
-	if(handlers[id].callback_send)
-		handlers[id].callback_send(c);
-
-	handlers[id].reentrance_detection_putc = FALSE;
+	if(HAL_UART_Receive(&UART_HandleStructure[UART2_ID], &c, 1, 100) == HAL_OK)
+		return c;
+	return 0;
 }
 
-void UART_puts(UART_id_e id, Uint8 * str)
+// Rajouter toute la foncion UART_gets(..,..,..) qui est en dessous !!
+/*
+ * @func
+ * @brief	Lit "len" caractères reçus, s'ils existent...
+ * @post	Fonction non blocante : s'il n'y a plus de caractère reçu, cette fonction renvoit la main
+ * @ret		Le nombre de caractères lus.
+ */
+
+uint32_t UART_gets(uart_id_e uart_id, uint8_t * datas, uint32_t len)
 {
-	Uint32 i;
-	for(i=0; str[i]; i++)
-		UART_putc(id, str[i]);
-}
-
-void UART_send_datas(UART_id_e id, Uint8 * datas, Uint32 len)
-{
-	Uint32 i;
-	for(i=0; i<len; i++)
-		UART_putc(id, datas[i]);
-}
-
-
-//-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-//--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-//--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-
-
-static bool_e UART_process_irq(UART_id_e id)
-{
-	UART_handler_t * h;
-	bool_e ret = FALSE;
-	USART_TypeDef * usart;
-	usart = (USART_TypeDef *)uarts[id];
-	h = (UART_handler_t *)&handlers[id];
-	uint16_t reg;
-	reg = usart->SR & usart->CR1;
-	if(reg & 0x20)		//équivaut à USART_GetITStatus(usart, USART_IT_RXNE)
+	uint32_t i;
+	for(i=0; i<len ; i++)
 	{
-		Uint8 c;
-		while(usart->SR & USART_FLAG_RXNE)	//équivaut à USART_GetFlagStatus(usart, USART_FLAG_RXNE)
-		{
-			c = usart->DR;	//équivaut à : USART_ReceiveData(usart);
-			if(h->initialized)
-			{
-				h->prxbuf[h->rx_index_in % RX_BUFFER_SIZE] = c;
-				h->rx_index_in++;
-				if(h->callback_receive)
-					h->callback_receive(c);
-				ret = TRUE;
-			}
-		}
-	}
-	if(reg & 0x80)	//équivaut à USART_GetITStatus(usart, USART_IT_TXE)
-	{
-		Uint32 in, out;
-		in = h->tx_index_in;
-		out = h->tx_index_out;
-		if(in-out)
-		{	//il reste des données à envoyer
-			usart->DR = h->ptxbuf[out % TX_BUFFER_SIZE];	//équivant à USART_SendData(usart, c); avec c = h->ptxbuf[out % TX_BUFFER_SIZE];
-			h->tx_index_out = out + 1;
-		}
+		if(UART_data_ready(uart_id))
+			datas[i] = UART_get_next_byte(uart_id);
 		else
-		{	//buffer vide -> Plus rien à envoyer -> désactivation de l'IT TXE.
-			usart->CR1 &= ~0x80;	//équivaut à USART_ITConfig(usart, USART_IT_TXE, DISABLE);
+			break;
+	}
+	return i;
+}
+
+/**
+ * @brief	Envoi un caractere sur l'USARTx. Fonction BLOCANTE si un caractere est deja en cours d'envoi.
+ * @func 	void UART_putc(UART_HandleTypeDef * UART_Handle, char c)
+ * @param	c : le caractere a envoyer
+ * @param	USARTx : USART1, USART2 ou USART6
+ */
+void UART_putc(uart_id_e uart_id, uint8_t c)
+{
+	HAL_StatusTypeDef state;
+	assert(uart_id < UART_ID_NB);
+	do
+	{	NVIC_DisableIRQ(nvic_irq_array[uart_id]);
+		state = HAL_UART_Transmit_IT(&UART_HandleStructure[uart_id], &c, 1);
+		NVIC_EnableIRQ(nvic_irq_array[uart_id]);
+	}while(state == HAL_BUSY);
+}
+
+// Rajouter toute la foncion UART_puts(..,..,..) qui est en dessous !!
+/**
+ * @brief	Envoi une chaine de caractere sur l'USARTx. Fonction BLOCANTE si un caractere est deja en cours d'envoi.
+ * @func 	void UART_putc(UART_HandleTypeDef * UART_Handle, char c)
+ * @param	str : la chaine de caractère à envoyer
+ * @param	USARTx : USART1, USART2 ou USART6
+ */
+void UART_puts(uart_id_e uart_id, uint8_t * str, uint32_t len)
+{
+	HAL_StatusTypeDef state;
+	HAL_UART_StateTypeDef uart_state;
+	assert(uart_id < UART_ID_NB);
+	if(uart_initialized[uart_id])
+	{
+		if(!len)
+			len = strlen((char*)str);
+		do
+		{
+			NVIC_DisableIRQ(nvic_irq_array[uart_id]);
+			state = HAL_UART_Transmit_IT(&UART_HandleStructure[uart_id], str, (uint16_t)len);
+			NVIC_EnableIRQ(nvic_irq_array[uart_id]);
+		}while(state == HAL_BUSY);
+
+		do{
+			uart_state = HAL_UART_GetState(&UART_HandleStructure[uart_id]);
+		}while(uart_state == HAL_UART_STATE_BUSY_TX || uart_state == HAL_UART_STATE_BUSY_TX_RX);	//Blocant.
+	}
+}
+
+
+/*
+ * @brief Fonction blocante qui présente un exemple d'utilisation de ce module logiciel.
+ */
+void UART_test(void)
+{
+	UART_init(UART1_ID,115200);
+	UART_init(UART2_ID,115200);
+	UART_init(UART6_ID,115200);
+	uint8_t c;
+	while(1)
+	{
+		if(UART_data_ready(UART1_ID))
+		{
+			c = UART_get_next_byte(UART1_ID);
+			UART_putc(UART1_ID,c);					//Echo du caractère reçu sur l'UART 1.
+		}
+
+		if(UART_data_ready(UART2_ID))
+		{
+			c = UART_get_next_byte(UART2_ID);
+			UART_putc(UART2_ID,c);					//Echo du caractère reçu sur l'UART 2.
+		}
+
+		if(UART_data_ready(UART6_ID))
+		{
+			c = UART_get_next_byte(UART6_ID);
+			UART_putc(UART6_ID,c);					//Echo du caractère reçu sur l'UART 6.
 		}
 	}
-	if((usart->SR & 0x08) && (usart->CR1 & 0x20)){	// équivaut à USART_GetITStatus(usart, USART_IT_ORE_RX)
-		volatile Uint8 c = usart->DR;	//équivaut à : USART_ReceiveData(usart);
-		UNUSED_VAR(c);
-	}
-	return ret;
 }
 
-#if USE_UART1
-	void USART1_IRQHandler(void)
-	{
-		UART_process_irq(UART1_ID);
-	}
-#endif
+/////////////////  ROUTINES D'INTERRUPTION  //////////////////////////////
 
-#if USE_UART2
-	void USART2_IRQHandler(void)
-	{
-		UART_process_irq(UART2_ID);
-	}
-#endif
-
-#if USE_UART3
-	void USART3_IRQHandler(void)
-	{
-		UART_process_irq(UART3_ID);
-	}
-#endif
-
-#if USE_UART4
-	void UART4_IRQHandler(void)
-	{
-		UART_process_irq(UART4_ID);
-	}
-#endif
-
-#if USE_UART5
-	void UART5_IRQHandler(void)
-	{
-		UART_process_irq(UART5_ID);
-	}
-	#endif
-
-#if USE_UART6
-	void USART6_IRQHandler(void)
-	{
-		UART_process_irq(UART6_ID);
-	}
-#endif
-
-
-//-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-//--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-//--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-
-char UART_read_stdin(void)
+void USART1_IRQHandler(void)
 {
-	while(!UART_data_ready(uart_for_stdin_id));
-	return (char)UART_get_next_msg(uart_for_stdin_id);
+	HAL_UART_IRQHandler(&UART_HandleStructure[UART1_ID]);
 }
 
-void UART_write_stdout(char c)
+void USART2_IRQHandler(void)
 {
-	UART_putc(uart_for_stdout_id,(uint8_t)c);
+	HAL_UART_IRQHandler(&UART_HandleStructure[UART2_ID]);
 }
 
-void UART_write_sterr(char c)
+void USART3_IRQHandler(void)
 {
-	while((uarts[uart_for_stderr_id]->SR & USART_FLAG_TXE) == RESET);
-	uarts[uart_for_stderr_id]->DR = (c & (uint16_t)0x01FF);
+	HAL_UART_IRQHandler(&UART_HandleStructure[UART3_ID]);
 }
 
-void UART_printf(UART_id_e uart_id, const char * format, ...)
+void UART4_IRQHandler(void)
 {
-	static char buffer[512]; //static pour être sur d'avoir la mémoire dispo, 512 pourrait causer des débordements de pile ?
-	va_list args_list;
-	va_start(args_list, format);
-	vsnprintf(buffer, 512, format, args_list);
-	va_end(args_list);
-
-	UART_puts(uart_id, buffer);
+	HAL_UART_IRQHandler(&UART_HandleStructure[UART4_ID]);
 }
+
+void UART5_IRQHandler(void)
+{
+	HAL_UART_IRQHandler(&UART_HandleStructure[UART5_ID]);
+}
+
+void USART6_IRQHandler(void)
+{
+	HAL_UART_IRQHandler(&UART_HandleStructure[UART6_ID]);
+}
+
+
+
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+{
+	uint8_t uart_id;
+	if(huart->Instance == USART1)		uart_id = UART1_ID;
+	else if(huart->Instance == USART2)	uart_id = UART2_ID;
+	else if(huart->Instance == USART3)	uart_id = UART3_ID;
+	else if(huart->Instance == UART4)	uart_id = UART4_ID;
+	else if(huart->Instance == UART5)	uart_id = UART5_ID;
+	else if(huart->Instance == USART6)	uart_id = UART6_ID;
+	else return;
+
+	buffer_rx_data_ready[uart_id] = TRUE;	//Le buffer n'est pas (ou plus) vide.
+	buffer_rx_write_index[uart_id] = (buffer_rx_write_index[uart_id] + 1) % BUFFER_RX_SIZE;						//Déplacement pointeur en écriture
+	HAL_UART_Receive_IT(&UART_HandleStructure[uart_id],&buffer_rx[uart_id][buffer_rx_write_index[uart_id]],1);	//Réactivation de la réception d'un caractère
+}
+
+
+
+//Callback called by hal_uart
+/*Selon l'instance de l'UART, on defini les broches qui vont bien (voir la doc)*/
+/* Remarque : pour la plupart des UART, plusieurs combinaisons de broches sont disponible. En cas de besoin, cette fonction peut être modifiée.
+ * -> consultez le classeur Ports_STM32F4.
+ */
+void HAL_UART_MspInit(UART_HandleTypeDef *huart)
+{
+
+	if(huart->Instance == USART1)
+	{
+		__HAL_RCC_GPIOB_CLK_ENABLE();		//Horloge des broches a utiliser
+		BSP_GPIO_PinCfg(GPIOB, GPIO_PIN_6, GPIO_MODE_AF_PP, GPIO_PULLUP, GPIO_SPEED_FAST, GPIO_AF7_USART1); //Configure Tx as AF
+		BSP_GPIO_PinCfg(GPIOB, GPIO_PIN_7, GPIO_MODE_AF_PP, GPIO_PULLUP, GPIO_SPEED_FAST, GPIO_AF7_USART1); //Configure Rx as AF
+		__HAL_RCC_USART1_CLK_ENABLE();		//Horloge du peripherique UART
+	}
+	else if(huart->Instance == USART2)
+	{
+		__HAL_RCC_GPIOA_CLK_ENABLE();		//Horloge des broches a utiliser
+		BSP_GPIO_PinCfg(GPIOA, GPIO_PIN_2, GPIO_MODE_AF_PP, GPIO_PULLUP, GPIO_SPEED_FAST, GPIO_AF7_USART2);	//Configure Tx as AF
+		BSP_GPIO_PinCfg(GPIOA, GPIO_PIN_3, GPIO_MODE_AF_PP, GPIO_PULLUP, GPIO_SPEED_FAST, GPIO_AF7_USART2); //Configure Rx as AF
+		__HAL_RCC_USART2_CLK_ENABLE();		//Horloge du peripherique UART
+	}
+	else if(huart->Instance == USART3)
+	{
+		__HAL_RCC_GPIOD_CLK_ENABLE();		//Horloge des broches a utiliser
+		BSP_GPIO_PinCfg(GPIOD, GPIO_PIN_8, GPIO_MODE_AF_PP, GPIO_PULLUP, GPIO_SPEED_FAST, GPIO_AF7_USART2);	//Configure Tx as AF
+		BSP_GPIO_PinCfg(GPIOD, GPIO_PIN_9, GPIO_MODE_AF_PP, GPIO_PULLUP, GPIO_SPEED_FAST, GPIO_AF7_USART2); //Configure Rx as AF
+		__HAL_RCC_USART3_CLK_ENABLE();		//Horloge du peripherique UART
+	}
+	else if(huart->Instance == UART4)
+	{
+		__HAL_RCC_GPIOC_CLK_ENABLE();		//Horloge des broches a utiliser
+		BSP_GPIO_PinCfg(GPIOC, GPIO_PIN_10, GPIO_MODE_AF_PP, GPIO_PULLUP, GPIO_SPEED_FAST, GPIO_AF7_USART2);	//Configure Tx as AF
+		BSP_GPIO_PinCfg(GPIOC, GPIO_PIN_11, GPIO_MODE_AF_PP, GPIO_PULLUP, GPIO_SPEED_FAST, GPIO_AF7_USART2); //Configure Rx as AF
+		__HAL_RCC_UART4_CLK_ENABLE();		//Horloge du peripherique UART
+	}
+	else if(huart->Instance == UART5)
+	{
+		__HAL_RCC_GPIOC_CLK_ENABLE();		//Horloge des broches a utiliser
+		__HAL_RCC_GPIOD_CLK_ENABLE();		//Horloge des broches a utiliser
+		BSP_GPIO_PinCfg(GPIOC, GPIO_PIN_12, GPIO_MODE_AF_PP, GPIO_PULLUP, GPIO_SPEED_FAST, GPIO_AF7_USART2);	//Configure Tx as AF
+		BSP_GPIO_PinCfg(GPIOD, GPIO_PIN_2, GPIO_MODE_AF_PP, GPIO_PULLUP, GPIO_SPEED_FAST, GPIO_AF7_USART2); //Configure Rx as AF
+		__HAL_RCC_UART5_CLK_ENABLE();		//Horloge du peripherique UART
+	}
+	else if (huart->Instance == USART6)
+	{
+		__HAL_RCC_GPIOC_CLK_ENABLE();		//Horloge des broches a utiliser
+		BSP_GPIO_PinCfg(GPIOC, GPIO_PIN_6, GPIO_MODE_AF_PP, GPIO_PULLUP, GPIO_SPEED_FAST, GPIO_AF8_USART6); //Configure Tx as AF
+		BSP_GPIO_PinCfg(GPIOC, GPIO_PIN_7, GPIO_MODE_AF_PP, GPIO_PULLUP, GPIO_SPEED_FAST, GPIO_AF8_USART6); //Configure Rx as AF
+		__HAL_RCC_USART6_CLK_ENABLE();		//Horloge du peripherique UART
+	}
+}
+
+
+
+
 
 

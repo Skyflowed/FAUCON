@@ -1,5 +1,6 @@
 /*
  * VL53_becon.h
+
  *
  *  Created on: 3 nov. 2019
  *      Author: Guillaume D.
@@ -37,8 +38,6 @@ typedef enum{
 
 
 
-
-
 typedef struct{
 	GPIO_TypeDef * GPIO_Port;
 	uint16_t GPIO_Pin;
@@ -58,6 +57,7 @@ typedef struct{
 	state_vl53_e state;
 	bool_e asked;
 }BEACON_data_sensor;
+
 
 /*
  * @brief Tableau contenant toutes les info des capteur d'une carte sensor_expander

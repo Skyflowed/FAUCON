@@ -34,7 +34,7 @@
 void init_pwm_tim1_tim3(void);
 void PWM_TIMER_set_duty(TIM_HandleTypeDef tim_handle, int channel, uint16_t duty);
 void TEST_pwms();
-
+void test_moteur_PC6(uint16_t TIME);
 
 
 

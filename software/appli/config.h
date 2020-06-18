@@ -1,6 +1,6 @@
 /*
  * config.h
- *
+
  *  Created on: 8 nov. 2016
  *      Author: Nirgal
  */
@@ -15,7 +15,7 @@
 #define USE_I2C					1
 #define USE_VL53L1X				1
 #define VL53L1X_I2C				I2C1
-#define VL53_NB					5
+#define VL53_NB					2
 #define VL_0					GPIOD, GPIO_PIN_2
 #define VL_1					GPIOD, GPIO_PIN_3
 #define VL_2					GPIOE, GPIO_PIN_10
