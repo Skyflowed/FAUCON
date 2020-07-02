@@ -7,18 +7,15 @@
  */
 
 
-		#include "stm32f4xx_hal.h"
-		#include "macro_types.h"
-		#include "stm32f4_uart.h"
-		#include "stm32f4_sys.h"
-		#include "bluetooth.h"
+#include "bluetooth.h"
 
 
-		/* !! Ne pas oublier d'initialiser les UART dans le main :
+/* !! Ne pas oublier d'initialiser les UART dans le main :
 		UART_init(UART6_ID,9600);	//bluetooth  //COM20 sur mon pc
 		UART_init(UART2_ID,9600);  //printf		//COM17 sur mon pc
 		//on utlise l'UART 2 pour printf(..)
-		SYS_set_std_usart(UART2_ID, UART2_ID, UART2_ID);*/
+		SYS_set_std_usart(UART2_ID, UART2_ID, UART2_ID);
+*/
 
 
 		//fonction
@@ -31,26 +28,26 @@
 			trame[1] = info2;
 			trame[2] = info3;
 			trame[3] = info4;
-			UART_puts(UART6_ID, trame, 4);
+			UART_puts(UART2_ID, trame, 4);
 		}
 
 		//envoie un caractère
 		void envoiCaractere(uint8_t c){
-			c=UART_get_next_byte(UART6_ID);
-			UART_putc(UART6_ID,c);
+			c=UART_get_next_byte(UART2_ID);
+			UART_putc(UART2_ID,c);
 		}
 
 		//reception d'un caractère
 		void receptionCaractere(){
-			if(UART_data_ready(UART6_ID)){
+			if(UART_data_ready(UART2_ID)){
 				uint8_t c;
-				c = UART_get_next_byte(UART6_ID);
+				c = UART_get_next_byte(UART2_ID);
 				//printf("%c",c);
 			}
 		}
 		//reception d'une Trame de 4 informations
 		void receptionTrame(){
-			if(UART_data_ready(UART6_ID)){
+			if(UART_data_ready(UART2_ID)){
 				uint8_t trame[4];
 				UART_gets(UART1_ID, trame, 7);
 				uint8_t info1 = *trame;

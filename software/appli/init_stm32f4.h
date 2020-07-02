@@ -18,7 +18,7 @@
 #include "stm32f4_spi.h"
 #include "stm32f4_gpio.h"
 #include "stm32f4_timer.h"
-
+#include "tests_methods.h"
 
 
 #define PWM_MOT_11 GPIOC, GPIO_PIN_6
@@ -35,7 +35,7 @@ void init_pwm_tim1_tim3(void);
 void PWM_TIMER_set_duty(TIM_HandleTypeDef tim_handle, int channel, uint16_t duty);
 void TEST_pwms();
 void test_moteur_PC6(uint16_t TIME);
-
+void test_moteur_PC6_2();
 
 
 

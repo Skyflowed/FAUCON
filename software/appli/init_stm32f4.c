@@ -38,7 +38,19 @@
  * 	Exemple :				50µs	 	= 84MHz/(100		*	42)
  */
 
+//==========================
+/*
+ PWM_MOT_11 GPIOC, GPIO_PIN_6 => TIM3_CH1
+ PWM_MOT_12 GPIOC, GPIO_PIN_7 => TIM3_CH2
+ PWM_MOT_13 GPIOC, GPIO_PIN_8 => TIM3_CH3
+ PWM_MOT_14 GPIOC, GPIO_PIN_9 => TIM3_CH4
 
+ PWM_MOT_21 GPIOE, GPIO_PIN_9 => TIM1_CH1
+ PWM_MOT_22 GPIOE, GPIO_PIN_11 => TIM1_CH2
+ PWM_MOT_23 GPIOE, GPIO_PIN_13 => TIM1_CH3
+ PWM_MOT_24 GPIOE, GPIO_PIN_14 => TIM1_CH4
+*/
+//==========================
 static TIM_HandleTypeDef TimHandle_1;	//Structure contenant les infos concernant l'état du timer 1
 static TIM_HandleTypeDef TimHandle_3;	//Structure contenant les infos concernant l'état du timer 3
 
@@ -174,6 +186,27 @@ void TEST_pwms(){
 
 void test_moteur_PC6(uint16_t TIME){
 	PWM_TIMER_set_duty(TimHandle_3, TIM_CHANNEL_1, TIME);
+}
+
+void test_moteur_PC6_2(){
+
+	if(compt < 100 && compt >= 0){
+		test_moteur_PC6(40);
+		HAL_GPIO_WritePin(LEDS_GPIO, LED_RED_PIN, SET);
+		HAL_GPIO_WritePin(LEDS_GPIO,LED_BLUE_PIN, RESET);
+		HAL_GPIO_WritePin(LEDS_GPIO,LED_GREEN_PIN, RESET);
+
+	}
+	else if(compt < 200 && compt > 100){
+		test_moteur_PC6(50);
+		HAL_GPIO_WritePin(LEDS_GPIO, LED_BLUE_PIN, SET);
+		HAL_GPIO_WritePin(LEDS_GPIO,LED_RED_PIN, RESET);
+	}
+	else if(compt < 5000 && compt > 200){
+		test_moteur_PC6(59);
+		HAL_GPIO_WritePin(LEDS_GPIO, LED_RED_PIN, SET);
+		HAL_GPIO_WritePin(LEDS_GPIO,LED_BLUE_PIN, RESET);
+	}
 }
 
 
