@@ -43,7 +43,6 @@ int main(void){
 	init_pwm_tim1_tim3();
 	//VL53L1X_init();
 
-<<<<<<< Updated upstream
 	//MPU6050_t mpu6050_datastruct;
 	//bool_e mpu6050_initialized = FALSE;
 
@@ -53,25 +52,12 @@ int main(void){
 	mpu_test_OK = mpu_init_OK;
 	mpu_test_results = mpu_datas_res;
 
-=======
-	//on init le mpu, structure et boolean de .h
-	if(MPU6050_Init(&mpu_datas_res, MPU6050_VCC_GPIO, MPU6050_VCC_PIN, MPU6050_Device_0, MPU6050_Accelerometer_8G, MPU6050_Gyroscope_2000s) == MPU6050_Result_Ok)
-		mpu_init_OK = TRUE;
-
->>>>>>> Stashed changes
 	TIMER2_run_1ms();
-	int16_t resX = 0;
 
 	while (1)
 	{
 		//puiss_mot_test_PC6();
-		//test_moteur_PC6(60);
-		datas_gyro_maj(&mpu_datas_res);
-
-		resX = datas_sensors_pooling.Gyroscope_X;
-		datas_sensors_pooling.Accelerometer_X = DataStruct->Accelerometer_X;
-
-
+		test_moteur_PC6(60);
 
 		//pixy_process_main();
 	}
